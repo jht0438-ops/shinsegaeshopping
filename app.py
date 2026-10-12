@@ -88,55 +88,48 @@ with T[3]:
  st.header('핵심 검증: 재고 부담을 감수해도 이익과 현금이 남는가?')
  st.write('전사 영업이익은 증가했고 2024~2025년 영업현금흐름도 플러스입니다. 그러나 직접 판매 상품별 수익성은 별도로 확인해야 합니다.')
  st.dataframe(D[['연도','재화판매수익','상품원가','영업이익','재고자산','영업현금흐름']].round(2),hide_index=True,use_container_width=True)
- st.markdown('### 가정 시나리오: 직접 판매 vs 수수료 중개')
- note('수익 인식 방식이 다른 두 사업을 같은 매출 숫자로 비교하면 판단이 왜곡됩니다.','동일한 고객 최종거래액을 가정하고 각 방식의 증분 공헌이익과 필요한 운전자본을 계산합니다.','추가 재고 투자로 얻는 증분이익이 자본 부담을 보상하는지 검토합니다.')
- st.caption('모든 입력은 분석용 가정이며 신세계라이브쇼핑의 실제 상품별 조건이 아닙니다. 단위: 억 원, 비율은 최종 고객거래액 대비.')
- with st.sidebar:
-  st.header('시나리오 가정')
-  gmv=st.number_input('비교할 최종 고객거래액 (억 원)',min_value=1.0,value=100.0,step=10.0)
-  fee=st.slider('중개 수수료율 (%)',0.0,60.0,22.0,0.5)
-  fee_var=st.slider('중개 방식 추가 변동비율 (%)',0.0,30.0,5.0,0.5)
-  direct_cost=st.slider('직접 판매 상품매입원가율 (%)',10.0,95.0,60.0,0.5)
-  direct_var=st.slider('직접 판매 추가 변동비율 (%)',0.0,35.0,12.0,0.5)
-  direct_loss=st.slider('직접 판매 예상 재고손실율 (%)',0.0,25.0,3.0,0.5)
-  inv_days=st.slider('직접 판매 재고 보유일수',0,240,75,5)
-  pay_days=st.slider('상품 매입대금 지급유예일수',0,180,30,5)
-  receive_days=st.slider('판매대금 회수일수',0,90,7,1)
-  fee_receive=st.slider('중개 수수료 회수일수',0,90,30,5)
-  annual_cost=st.slider('연간 자금조달/기회비용 (%)',0.0,20.0,7.0,0.5)
+ st.markdown('### 단순 시나리오: 원가율과 재고 보유기간만 조정')
+ st.caption('면접 설명을 위해 최종 고객거래액 100억 원, 중개수수료율 22%, 기타 변동비 등은 예시값으로 고정했습니다. 실제 회사의 계약조건이 아닙니다.')
+ note('직접 판매는 판매이익이 높아도 재고를 오래 보유하면 자금 부담이 생깁니다.','매입원가율과 재고 보유기간 두 가지 변수만 바꾸어 중개 방식과 비교합니다.','추가 이익이 재고 관련 자금비용을 감당할 수 있는지 판단합니다.')
+ left,right=st.columns(2)
+ with left:
+  direct_cost=st.slider('① 직접 판매 상품매입원가율 (%)',40,85,60,5,help='고객 판매금액 중 상품 매입에 드는 비용의 비율')
+ with right:
+  inv_days=st.slider('② 재고 보유기간 (일)',0,180,60,15,help='매입한 상품을 판매하기까지 평균 보유하는 기간')
+ gmv=100.0
+ fee=22.0
+ fee_var=5.0
+ direct_var=12.0
+ direct_loss=3.0
+ pay_days=30
+ receive_days=7
+ fee_receive=30
+ annual_cost=7.0
  direct_contrib=gmv*(1-(direct_cost+direct_var+direct_loss)/100)
  agency_contrib=gmv*(fee-fee_var)/100
- daily_cost=gmv*direct_cost/100/365
- nwc_direct=max(0,daily_cost*(inv_days+receive_days-pay_days))
+ nwc_direct=max(0,gmv*direct_cost/100/365*(inv_days+receive_days-pay_days))
  nwc_agency=gmv*fee/100/365*fee_receive
  direct_fin=nwc_direct*annual_cost/100
  agency_fin=nwc_agency*annual_cost/100
  direct_adj=direct_contrib-direct_fin
  agency_adj=agency_contrib-agency_fin
  extra=direct_adj-agency_adj
- res=pd.DataFrame({'방식':['직접 판매','수수료 중개'],'고객 최종거래액':[gmv,gmv],'회계상 인식 수익(가정)':[gmv,gmv*fee/100],'증분 공헌이익':[direct_contrib,agency_contrib],'추정 운전자본 필요액':[nwc_direct,nwc_agency],'연간 자금비용':[direct_fin,agency_fin],'자금비용 차감 후 증분이익':[direct_adj,agency_adj]})
- st.dataframe(res.round(2),hide_index=True,use_container_width=True)
+ res=pd.DataFrame({'비교 항목':['고객 최종거래액','공헌이익(가정)','추정 운전자본','연간 자금비용','자금비용 차감 후 이익'], '직접 판매':[gmv,direct_contrib,nwc_direct,direct_fin,direct_adj], '수수료 중개':[gmv,agency_contrib,nwc_agency,agency_fin,agency_adj]})
  a,b,c=st.columns(3)
- a.metric('직접판매 자금비용 차감 후',f'{direct_adj:,.2f}억')
- b.metric('중개 자금비용 차감 후',f'{agency_adj:,.2f}억')
- c.metric('직접판매의 증분 차이',f'{extra:+,.2f}억')
- st.plotly_chart(px.bar(res,x='방식',y=['증분 공헌이익','연간 자금비용'],barmode='group',title='이익과 자금비용 비교 (억원)'),use_container_width=True)
- if extra>0:st.success(f'현재 가정에서는 직접 판매가 중개보다 {extra:.2f}억 원 유리합니다. 단, 재고 위험과 실현 가능성을 검증해야 합니다.')
- elif extra<0:st.warning(f'현재 가정에서는 중개가 직접 판매보다 {-extra:.2f}억 원 유리합니다. 상품원가율 또는 재고 보유기간을 낮출 수 있는지 검토하세요.')
- else:st.info('두 방식의 자금비용 차감 후 증분이익이 같습니다.')
- st.markdown('**계산:** 직접판매 공헌이익 = 고객거래액 × (1−매입원가율−추가변동비율−예상재고손실율). 중개 공헌이익 = 고객거래액 × (수수료율−중개추가변동비율). 운전자본 = 각 방식의 단순화된 회수기간 가정으로 추정. 고정비, 법인세, 실제 회계 매출 인식 판단, 재고의 세부 결제조건은 미반영.')
- st.subheader('민감도: 직접판매 원가율과 재고 보유일수')
- costs=range(max(10,int(direct_cost)-15),min(95,int(direct_cost)+15)+1,5)
- days=range(0,181,15)
- heat=[]
- for co in costs:
-  for day in days:
-   dc=gmv*(1-(co+direct_var+direct_loss)/100)
-   nw=max(0,gmv*co/100/365*(day+receive_days-pay_days))
-   heat.append({'원가율(%)':co,'재고보유일수':day,'직접판매 우위액':dc-nw*annual_cost/100-agency_adj})
- H=pd.DataFrame(heat).pivot(index='원가율(%)',columns='재고보유일수',values='직접판매 우위액')
- fig=px.imshow(H,aspect='auto',color_continuous_scale='RdBu',color_continuous_midpoint=0,labels={'color':'직접판매 우위(억원)'})
- st.plotly_chart(fig,use_container_width=True)
+ a.metric('직접 판매의 조정 후 이익',f'{direct_adj:.2f}억')
+ b.metric('수수료 중개의 조정 후 이익',f'{agency_adj:.2f}억')
+ c.metric('직접 판매의 추가 이익',f'{extra:+.2f}억')
+ st.dataframe(res.round(2),hide_index=True,use_container_width=True)
+ if extra>0:
+  st.success(f'현재 가정에서는 직접 판매가 {extra:.2f}억 원 유리합니다. 다만 실제 상품별 자료로 검증해야 합니다.')
+ elif extra<0:
+  st.warning(f'현재 가정에서는 수수료 중개가 {-extra:.2f}억 원 유리합니다. 원가율 개선이나 재고 보유기간 단축을 검토할 수 있습니다.')
+ else:
+  st.info('두 방식의 자금비용 차감 후 이익이 같습니다.')
+ with st.expander('고정 가정 및 계산 방식 보기 (면접 참고)'):
+  st.write('비교 거래액 100억 원, 중개 수수료율 22%, 중개 추가 변동비율 5%, 직접 판매 추가 변동비율 12%, 재고손실율 3%, 상품대금 지급유예 30일, 판매대금 회수 7일, 중개 수수료 회수 30일, 연간 자금 기회비용 7%를 고정했습니다.')
+  st.write('직접 판매 공헌이익 = 100억 × (1−원가율−12%−3%). 중개 공헌이익 = 100억 × (22%−5%). 각 방식의 추정 운전자본 × 7%를 차감해 비교합니다.')
+  st.warning('단순화한 연간 비교 모형으로 고정비, 세금, 실제 결제조건 및 상품별 원가를 반영하지 않습니다. 재고 보유기간에 따른 자금비용은 가정에 따른 추정치입니다.')
 with T[4]:
  st.header('현금 잔액 감소와 유동성 악화를 구분')
  note('현금이 줄었다는 이유만으로 유동성 악화라고 판단하면 안 됩니다.','현금과 기타유동금융자산을 함께 보고 영업현금흐름과 배당을 점검합니다.','상품매입 자금, 배당, 금융상품 만기를 고려한 월별 자금계획의 필요성을 판단합니다.')
